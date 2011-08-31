@@ -62,8 +62,19 @@ Note: If your error messages are long, consider changing last_error field to a :
 
 h2. Usage
 
-Jobs are simple ruby objects with a method called perform. Any object which responds to perform can be stuffed into the jobs table.
-Job objects are serialized to yaml so that they can later be resurrected by the job runner. 
+If you are delaying a single method call, you can queue up that call simply be prefixing it with @delay@. (@send_later@ is deprecated) E.g.,
+
+<pre><code>
+  UserMailer.send_welcome_email(user)
+  BatchImporter.new(Shop.find(1)).import_massive_csv(massive_csv)
+</code></pre>
+becomes
+<pre><code>
+  serMailer.delay.send_welcome_email(user)
+  BatchImporter.new(Shop.find(1)).delay.import_massive_csv(massive_csv)
+</code></pre>
+
+You can make more complicated jobs by creating a simple Ruby object with a method called @perform@. Any object which responds to @perform@ can be stuffed into the jobs table. Job objects are serialized to YAML so that they can later be resurrected by the job runner. E.g.,
 
 <pre><code>
   class NewsletterJob < Struct.new(:text, :emails)
@@ -75,14 +86,7 @@ Job objects are serialized to yaml so that they can later be resurrected by the 
   Delayed::Job.enqueue NewsletterJob.new('lorem ipsum...', Customers.find(:all).collect(&:email))
 </code></pre>
 
-There is also a second way to get jobs in the queue: send_later. 
-
-<pre><code>
-  BatchImporter.new(Shop.find(1)).send_later(:import_massive_csv, massive_csv)
-</code></pre>
-
-This will simply create a @Delayed::PerformableMethod@ job in the jobs table which serializes all the parameters you pass to it. There are some special smarts for active record objects
-which are stored as their text representation and loaded from the database fresh when the job is actually run later.
+When you use the @delay@ method, it simply creates a @Delayed::PerformableMethod@ job in the jobs table which serializes all the parameters you pass to it. There are some special smarts for active record objects which are stored as their text representation and loaded from the database fresh when the job is actually run later.
                                                                                                                               
                                                                                                                     
 h2. Running the jobs
@@ -106,7 +110,7 @@ run multiple workers on per computer, but you must give each one a unique name:
     worker = Delayed::Worker.new
     worker.name = 'worker-' + n.to_s
     worker.start
-  end	
+  end  
 </code></pre>
 
 Keep in mind that each worker will check the database at least every 5 seconds.
@@ -118,6 +122,8 @@ h3. Cleaning up
 You can invoke @rake jobs:clear@ to delete all jobs in the queue.
 
 h3. Changes
+
+* 2.0: TO WRITE
 
 * 1.7.0: Added failed_at column which can optionally be set after a certain amount of failed job attempts. By default failed job attempts are destroyed after about a month. 
 
